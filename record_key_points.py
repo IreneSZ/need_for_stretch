@@ -26,6 +26,7 @@ from op.hand import Hand
 
 from utils import *
 from detect_position.position_detection import baseline
+from reader import Reader
 
 
 body_estimation = Body('body_pose_model.pth')
@@ -39,14 +40,14 @@ if not os.path.isdir('./db'):
 
 
 #@profile
-def get_points_webcam(capture):
+def get_points_webcam(reader: Reader):
     """
     camera takes a pic
     calls openpose + position detection
     records the time stamp, coordinates & position indicator in the csv
     """
 
-    ret, img = capture.read()
+    ret, img = reader.read()
     end = time.time()
 
     start = time.time()

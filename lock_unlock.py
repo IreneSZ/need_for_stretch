@@ -122,7 +122,6 @@ def show_readable_angle(part: str, angle: float):
     
 
 def is_squat(data, min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee):
-    #data = get_points_webcam(capture)[1]
     elbow = three_point_angle(data, 3, 2, 8)
     hip = three_point_angle(data, 2, 8, 9)
     knee = three_point_angle(data, 8, 9, 10)
