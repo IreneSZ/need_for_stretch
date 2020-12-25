@@ -1,33 +1,25 @@
-import sqlite3
-from sqlite3 import Error
-from pathlib import Path
+import argparse
+import copy
 import os
-from loguru import logger
-
-
-
+import sqlite3
+import time
+import timeit
+from datetime import datetime
+from pathlib import Path
+from sqlite3 import Error
 
 import cv2
 import matplotlib.pyplot as plt
-import copy
 import numpy as np
 import torch
-
-import timeit
-import argparse
-from datetime import datetime
-import time
-
-from op import model
-from op import util
+from loguru import logger
+from op import model, util
 from op.body import Body
 from op.hand import Hand
 
-
-from utils import *
 from detect_position.position_detection import baseline
 from reader import Reader
-
+from utils import dict_index
 
 body_estimation = Body('body_pose_model.pth')
 
@@ -128,6 +120,3 @@ def record_points(db_path, lst_points):
     conn.commit()
     conn.close()
     logger.info(f'Database created at {db_path}.')
-
-
-

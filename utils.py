@@ -1,3 +1,4 @@
+import datetime
 from collections import defaultdict
 import numpy as np
 
@@ -9,7 +10,10 @@ import math
 # 2. if the y distance between foot and hip less than the distance between hip and head
 # 3. if foot or knee undetected, check if hand-elbow-sholder approx 90 degree
 
-
+def get_img_name() -> str:
+    now = datetime.datetime.now()
+    img_name = datetime.datetime.strftime(now, '%Y-%m-%d-%H-%M-%S') + '.jpg'
+    return img_name
 
 
 #################### combine the three?

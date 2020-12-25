@@ -1,9 +1,9 @@
 import cv2
 import argparse
 import os
-import datetime
 import time
 from pathlib import Path
+from utils import get_img_name
 
 
 dir_name = Path('./data/unlabeled_data/')
@@ -28,10 +28,7 @@ while True:
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
     if time.time() - start_time >= 2: #<---- Check if 60 sec passed
-        now = datetime.datetime.now()
-
-        img_name = datetime.datetime.strftime(now, '%Y-%m-%d-%H-%M-%S') + '.jpg'
-        img_name = dir_name / img_name
+        img_name = dir_name / get_img_name()
         cv2.imwrite(str(img_name), frame)
         print("{} written!".format(img_name))
         start_time = time.time()

@@ -47,7 +47,7 @@ from argparse import ArgumentParser
 #     lst_points, data = get_points_webcam(capture)
 #     record_points(db_path, lst_points)
 
-def capture_and_openpose(reader: Reader):
+def capture_and_openpose(reader: Reader) -> bool:
     #print('start capturing')
     # capture = cv2.VideoCapture(0)
     # capture.set(3, 320)
@@ -55,6 +55,7 @@ def capture_and_openpose(reader: Reader):
     lst_points, data = get_points_webcam(reader)
 
     # only record points and do posture correction when enough key points are detected
+    locked = False
     if (data[0] == -1).sum() <= 5: 
         record_points(db_path, lst_points)
 
@@ -65,22 +66,27 @@ def capture_and_openpose(reader: Reader):
         if wrong_position or wrong_hand:
             playsound('./sound_effects/alarm.m4a')
 
-def lock_and_unlock(reader: Reader):
+        # lock
+        last_n_records = get_last_n_positions(db_path, num_records=3)
+        if last_n_records.count(1) > 3 * 0.5:
+            locked = True
+            logger.info('Sitting for too long.')
+            pyautogui.hotkey('winleft', 'l')
+            time.sleep(5)
+    
+    return locked
+
+def unlock(reader: Reader) -> bool:
     # capture = cv2.VideoCapture(0)
     # capture.set(3, 320)
     # capture.set(4, 240)
     lst_points, data = get_points_webcam(reader)
     # decide whether to lock pc
     # when PC is locked, recording is paused
-    last_n_records = get_last_n_positions(db_path, num_records=3)
-    print(last_n_records)
-    if last_n_records.count(1) > 3 * 0.5:
-        pyautogui.hotkey('winleft', 'l')
-        time.sleep(5)
-        
-        if continuous_stretch(2, data, min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee):
-            unlock_pc()
-
+    if continuous_stretch(2, data, min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee):
+        unlock_pc()
+        return True
+    return False
 
 
 if __name__ == '__main__':
@@ -145,18 +151,28 @@ if __name__ == '__main__':
     min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee = get_strech_metrics('./squat_img/')
     # print(continuous_stretch(2, data, min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee))
 
-
+    cam_reader = VideoReader(debug=args.debug)
     if args.debug:
-        reader = DebugReader('./squat_test')
+        unlock_reader = DebugReader('./squat_test')
     else:
-        capture = cv2.VideoCapture(-1)
-        capture.set(3, 320)
-        capture.set(4, 240)
-        reader = VideoReader(capture)
-    schedule.every(0.1).minutes.do(capture_and_openpose, reader=reader)
-    schedule.every(0.1).minutes.do(lock_and_unlock, reader=reader)
+        unlock_reader = cam_reader
+# 
+    # schedule.every(0.1).minutes.do(capture_and_openpose, reader=cam_reader)
+    # schedule.every(0.1).minutes.do(lock_and_unlock, reader=unlock_reader)
 
+    # while True:
+
+        # schedule.run_pending()
+        # time.sleep(1)
 
     while True:
-        schedule.run_pending()
+        locked = capture_and_openpose(cam_reader)
+
+        if locked:
+            logger.info('Locked.')
+            unlocked = unlock(unlock_reader)
+            while not unlocked:
+                time.sleep(1)
+            logger.info('Unlocked.')
+
         time.sleep(1)
