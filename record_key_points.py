@@ -45,18 +45,18 @@ def get_points_webcam(capture):
     calls openpose + position detection
     records the time stamp, coordinates & position indicator in the csv
     """
-    start = time.time()
+
     ret, img = capture.read()
     end = time.time()
-    print('opencv img loading time:', end - start)
 
     start = time.time()
-    print(img.shape)
+    #print(img.shape)
     candidate, subset = body_estimation(img)
     end = time.time()
     print('openpose time is', end-start)
 
     lst_points, data = process_candidate(candidate)
+    lst_points = sit_or_stand(lst_points, data)
     return lst_points, data
 
 def process_candidate(candidate):
@@ -82,7 +82,9 @@ def process_candidate(candidate):
         lst_points.append(x)
         lst_points.append(y)
 
+    return lst_points, data
 
+def sit_or_stand(lst_points, data):
     # if no points detected, y_pred = -1, meaning no person in view
     if all(p == -1 for p in lst_points[1:]):
         y_pred = -1
@@ -93,14 +95,17 @@ def process_candidate(candidate):
         data = torch.Tensor(data)
         y_score = model(data.view(-1, 36)).detach().softmax(dim=1).numpy()   
         y_pred = np.argmax(y_score, axis=1).item()
-        print(y_pred)
 
+        if y_pred == 0:
+            print('stand')
+        if y_pred == 1:
+            print('sit')
         end = time.time()
         print('position classification time:', end - start)
 
     lst_points.append(y_pred)
 
-    return lst_points, data    # data is still 2 * 18 numpy array
+    return lst_points
 
 
 

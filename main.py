@@ -34,6 +34,7 @@ from lock_unlock import lock_pc, unlock_pc, get_last_n_positions, continuous_str
 
 
 
+
 # every 30 seconds, run this script to 
 # (1) run openpose, get key points coordinates
 # (2) run the model to detect sitting/standing position
@@ -111,10 +112,10 @@ except sqlite3.OperationalError:
 
 
 def capture_and_openpose():
-    print('start capturing')
-    capture = cv2.VideoCapture(-1)
-    capture.set(3, 320)
-    capture.set(4, 240)
+    #print('start capturing')
+    # capture = cv2.VideoCapture(0)
+    # capture.set(3, 320)
+    # capture.set(4, 240)
     lst_points, data = get_points_webcam(capture)
 
     # only record points and do posture correction when enough key points are detected
@@ -127,31 +128,40 @@ def capture_and_openpose():
         wrong_hand = hand_on_face(data, 30)
         if wrong_position or wrong_hand:
             playsound('./sound_effects/alarm.m4a')
+
+def lock_and_unlock():
+    # capture = cv2.VideoCapture(0)
+    # capture.set(3, 320)
+    # capture.set(4, 240)
+    lst_points, data = get_points_webcam(capture)
+    # decide whether to lock pc
+    # when PC is locked, recording is paused
+    last_n_records = get_last_n_positions(db_path, num_records=3)
+    print(last_n_records)
+    if last_n_records.count(1) > 3 * 0.5:
+        pyautogui.hotkey('winleft', 'l')
+        time.sleep(5)
         
-        # decide whether to lock pc
-        # when PC is locked, recording is paused
-        last_n_records = get_last_n_positions(db_path, num_records=3)
-        print(last_n_records)
-        if last_n_records.count(1) > 3 * 0.5:
-            pyautogui.hotkey('winleft', 'l')
-            time.sleep(10)
+        if continuous_stretch(2, data, min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee):
             unlock_pc()
-    
 
 
-#def unlock():
 
-
-    # calculate cumulative standing time, to determine if need lock pc
+capture = cv2.VideoCapture(-1)
+capture.set(3, 320)
+capture.set(4, 240)
 
 
 if __name__ == '__main__':
-    # capture = cv2.VideoCapture(-1)
-    # capture.set(3, 320)
-    # capture.set(4, 240)
-    min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee = get_strech_metrics('./squat_img/')
 
-    schedule.every(0.06).minutes.do(capture_and_openpose)
+    # lst_points, data = get_points_webcam(capture)
+
+    min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee = get_strech_metrics('./squat_img/')
+    # print(continuous_stretch(2, data, min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee))
+
+    schedule.every(0.1).minutes.do(capture_and_openpose)
+    schedule.every(0.1).minutes.do(lock_and_unlock)
+
 
     while True:
         schedule.run_pending()

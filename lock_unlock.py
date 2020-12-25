@@ -83,8 +83,9 @@ def three_point_angle(data, idx_start, idx_mid, idx_end):
     vec2 = [end[0] - mid[0], mid[1] - end[1]]
 
     cos = (vec1[0]*vec2[0] + vec1[1]*vec2[1]) / (math.sqrt(vec1[0]**2 + vec1[1]**2) * math.sqrt(vec2[0]**2 + vec2[1]**2))
-    
-    return cos
+    angle = math.acos(cos)
+
+    return angle
 
 
 def get_strech_metrics(img_folder):
@@ -115,15 +116,25 @@ def get_strech_metrics(img_folder):
 
     return min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee
 
+def show_readable_angle(part: str, angle: float):
+    angle = angle * 180 / 3.1415926
+    print(f'{part} angle {angle:.1f}.')
+    
 
 def is_squat(data, min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee):
     #data = get_points_webcam(capture)[1]
     elbow = three_point_angle(data, 3, 2, 8)
     hip = three_point_angle(data, 2, 8, 9)
     knee = three_point_angle(data, 8, 9, 10)
+    show_readable_angle('elbow', elbow)
+    show_readable_angle('hip', hip)
+    show_readable_angle('knee', knee)
+
     if min_elbow <= elbow and elbow <= max_elbow and min_hip <= hip and hip <= max_hip and min_knee <= knee and knee <= max_knee:
+        print('squat', elbow, hip, knee)
         return True
     else:
+        print('not squat', elbow, hip, knee)
         return False
 
 
@@ -140,7 +151,7 @@ def continuous_stretch(num_seconds, data, min_elbow, max_elbow, min_hip, max_hip
                 num_stretch += 1
             else:
                 num_stretch = 0
-            
+            print(num_stretch)
             start_time = time.time()
 
     return True
