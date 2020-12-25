@@ -138,7 +138,7 @@ def is_squat(data, min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee):
 
 
 # numpy array to store the min and max of the cosine values of the three key angle points
-def continuous_stretch(num_seconds, data, min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee):
+def continuous_stretch(num_seconds, reader, min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee):
     """
     need to hold the position for num_seconds seconds, continuously
     """
@@ -146,6 +146,7 @@ def continuous_stretch(num_seconds, data, min_elbow, max_elbow, min_hip, max_hip
     start_time = time.time()
     while num_stretch < num_seconds:
         if time.time() - start_time >= 1: 
+            _, data = get_points_webcam(reader)
             if is_squat(data, min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee):
                 num_stretch += 1
             else:

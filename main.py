@@ -80,10 +80,10 @@ def unlock(reader: Reader) -> bool:
     # capture = cv2.VideoCapture(0)
     # capture.set(3, 320)
     # capture.set(4, 240)
-    lst_points, data = get_points_webcam(reader)
+    # lst_points, data = get_points_webcam(reader)
     # decide whether to lock pc
     # when PC is locked, recording is paused
-    if continuous_stretch(2, data, min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee):
+    if continuous_stretch(2, reader, min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee):
         unlock_pc()
         return True
     return False
@@ -152,10 +152,10 @@ if __name__ == '__main__':
     # print(continuous_stretch(2, data, min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee))
 
     cam_reader = VideoReader(debug=args.debug)
-    if args.debug:
-        unlock_reader = DebugReader('./squat_test')
-    else:
-        unlock_reader = cam_reader
+    # if args.debug:
+    #     unlock_reader = DebugReader('./squat_test')
+    # else:
+    unlock_reader = cam_reader
 # 
     # schedule.every(0.1).minutes.do(capture_and_openpose, reader=cam_reader)
     # schedule.every(0.1).minutes.do(lock_and_unlock, reader=unlock_reader)
@@ -170,8 +170,10 @@ if __name__ == '__main__':
 
         if locked:
             logger.info('Locked.')
-            unlocked = unlock(unlock_reader)
-            while not unlocked:
+            while True:
+                unlocked = unlock(unlock_reader)
+                if unlocked:
+                    break
                 time.sleep(1)
             logger.info('Unlocked.')
 
