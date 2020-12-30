@@ -12,8 +12,8 @@ def calculate_angle(coor1, coor2):
     # a vector starting from shoulder to any other point
     x1, y1 = coor1
     x2, y2 = coor2
-
     cos = (x2 - x1) / math.sqrt((x2 - x1) ** 2 + (y1 - y2) ** 2)
+    
     return cos
 
 
@@ -21,7 +21,6 @@ def dist(coor1, coor2):
     """
     coor1, coor2: (x, y) 
     """
-
     x1, y1 = coor1
     x2, y2 = coor2
     distance = math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
@@ -36,6 +35,7 @@ def head_shoulder(data):
     (if any key point is missing, its coordinate is (-1, -1))
     use any one from the nose - shoulder, left ear - shoulder, left eye - shoulder pairs coordinates to evaluate head-shoulder posture
     """
+    # key point indices:
     # left ear: 16
     # left eye: 14
     # nose: 0
@@ -46,8 +46,7 @@ def head_shoulder(data):
     nose = get_coords(0, data)
     l_shoulder = get_coords(2, data)
 
-    # ind: indicator of whether needs posture correction, so True = bad pose
-
+    # ind_part: indicator of whether needs posture correction, so True = bad pose
     cos_ear = 2
     cos_eye = 2
     cos_nose = 2
@@ -57,23 +56,18 @@ def head_shoulder(data):
     ind_nose = False
     if l_ear != (-1, -1):
         cos_ear = calculate_angle(l_shoulder, l_ear)
-        #print('ear', cos_ear)
         ind_ear = cos_ear < -0.8
         
     if l_eye != (-1, -1):
         cos_eye = calculate_angle(l_shoulder, l_eye)
-        #print('eye', cos_eye)
+        ind_eye = cos_eye < -0.6
 
-        ind_eye = cos_eye < -0.65
     if nose != (-1, -1):
         cos_nose = calculate_angle(l_shoulder, nose)
-        #print('nose', cos_nose)
         ind_nose = cos_nose < -0.73
         
     if any([ind_ear, ind_eye, ind_nose]):
-        #print('WARNING: wrong head shoulder posture')
         logger.info(f'WARNING: wrong head shoulder posture')
-
         return True
     else:
         return False
@@ -110,7 +104,6 @@ def hand_on_face(data, threshold):
     #print(lst_dist)
     if min(lst_dist) <= threshold:
         logger.info(f'WARNING: hand on face')
-
         return True
     else:
         return False
@@ -118,64 +111,3 @@ def hand_on_face(data, threshold):
 
 
 
-
-# def hand2earOrEye(l_hand, r_hand, l_ear, r_ear, threshold):
-#     """
-#     when hand and ear both detected (not (-1, -1)), if any one of the 4 possible has a distance < threshold, return True (hand on face)
-#     """
-#     lst_distance = []
-
-#     safe_append(l_hand, l_ear, lst_distance)
-#     safe_append(l_hand, r_ear, lst_distance)
-#     safe_append(r_hand, l_ear, lst_distance)
-#     safe_append(r_hand, r_ear, lst_distance)
-
-#     #print(lst_distance)
-#     print('to ear or eye', lst_distance)
-#     if any(x < threshold for x in lst_distance):
-#         return True
-#     else:
-#         return False
-
-
-# def hand2nose(l_hand, r_hand, nose, threshold):
-#     lst_distance = []
-#     safe_append(l_hand, nose, lst_distance)
-#     safe_append(r_hand, nose, lst_distance)
-#     print('to nose', lst_distance)
-
-#     if any(x < threshold for x in lst_distance):
-#         return True
-#     else:
-#         return False
-
-
-
-
-
-# def hand_on_face(data, ear_threshould=40, nose_threshould=40, eye_threshould=40):
-#     nose = get_coords(0, data)
-#     l_hand = get_coords(4, data)
-#     r_hand = get_coords(7, data)
-#     l_ear = get_coords(16, data)
-#     r_ear = get_coords(17, data)
-#     l_eye = get_coords(14, data)
-#     r_eye = get_coords(15, data)
-
-#     hand_ear = hand2earOrEye(l_hand, r_hand, l_ear, r_ear, ear_threshould)
-#     hand_eye = hand2earOrEye(l_hand, r_hand, l_eye, r_eye, eye_threshould)
-#     hand_nose = hand2nose(l_hand, r_hand, nose, nose_threshould)
-
-
-#     if hand_ear or hand_eye or hand_nose: 
-#         print('WARNING: hand on face')
-
-
-
-#print(hand2earOrEye(l_hand, r_hand, l_ear, r_ear, ear_threshould))
-#print(hand2earOrEye(l_hand, r_hand, l_eye, r_eye, eye_threshould))
-#print(hand2nose(l_hand, r_hand, nose, nose_threshould))
-
-
-
-#print(hand_on_face(data,ear_threshould=90, nose_threshould=70, eye_threshould=70))

@@ -21,9 +21,6 @@ from record_key_points import (get_points_webcam, process_candidate,
 
 body_estimation = Body('body_pose_model.pth')
 
-# model = baseline(36, 20, 10, 8, 5, 2)
-# model.load_state_dict(torch.load('detect_position/baseline.pt'))
-# model.eval()
 
 if not os.path.isdir('./squat_img'):
     os.mkdir('./squat_img')
@@ -153,7 +150,6 @@ def is_squat(data, min_elbow, max_elbow, min_shoulder, max_shoulder, min_hip, ma
         return False
 
 
-# numpy array to store the min and max of the cosine values of the three key angle points
 def continuous_stretch(num_seconds, reader, min_elbow, max_elbow, min_shoulder, max_shoulder, min_hip, max_hip, min_knee, max_knee):
     """
     need to hold the position for num_seconds seconds, continuously
@@ -173,39 +169,3 @@ def continuous_stretch(num_seconds, reader, min_elbow, max_elbow, min_shoulder, 
     return True
 
 
-# if __name__ == '__main__':
-
-
-# print("elbow", lst_elbow_angle)
-# print(lst_hip_angle)
-# print(lst_knee_angle)
-
-
-# def calculate_point_distance(point1, point2):
-#     """
-#     both inputs are 2*18 arrays
-#     only use key points 1 - 13 because the rest of the keypoints do not really matter in this task
-#     """
-#     point1 = point1[:, 1:14]
-#     point2 = point2[:, 1:14]
-
-#     point1 = point1.flatten()
-#     point2 = point2.flatten()
-#     return(distance.euclidean(point1, point2))
-
-
-# def squat_or_not(capture, data_sit, data_stand, data_squat):
-#     data_new =
-#     dist2sit =
-
-
-# point1 = get_points_oneshot('./oneshot_sitting.jpg')
-# point2 = get_points_oneshot('./oneshot_standing.jpg')
-# point3 = get_points_oneshot('./oneshot_squat.jpg')
-
-
-# last_n_records = [1, 1, 1, 1, 1, 1]
-# num_records = 5
-# pct_sigging = 0.95
-
-# lock_pc(last_n_records, num_records, pct_sigging)

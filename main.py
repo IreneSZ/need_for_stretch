@@ -15,9 +15,7 @@ import schedule
 import torch
 from loguru import logger
 from op import model, util
-from op.body_2 import Body
-
-#from op.body import Body
+from op.body import Body
 from op.hand import Hand
 from playsound import playsound
 
@@ -157,7 +155,6 @@ if __name__ == '__main__':
     # get the data for stretch positions
     min_elbow, max_elbow, min_shoulder, max_shoulder, min_hip, max_hip, min_knee, max_knee = get_strech_metrics('./squat_img/')
     print(min_elbow, max_elbow, min_shoulder, max_shoulder, min_hip, max_hip, min_knee, max_knee)
-    # print(continuous_stretch(2, data, min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee))
 
     cam_reader = VideoReader(debug=args.debug)
     # if args.debug:
@@ -169,51 +166,26 @@ if __name__ == '__main__':
     last_unlocked_time = str(datetime.now().time())
 
     while True:
-        lst_points, data = get_points_webcam(cam_reader)
+        locked = False
+        while not locked:
+            time.sleep(2)
+            locked = capture_and_openpose(cam_reader, last_unlocked_time)
 
-        record_points(db_path, lst_points)
-        # locked = False
-        # while not locked:
-        #     time.sleep(2)
-        #     locked = capture_and_openpose(cam_reader, last_unlocked_time)
+        last_locked_time = str(datetime.now().time())
+        # off screen count for 5 min
+        offscreen_enough = False
+        while not offscreen_enough:
+            offscreen_enough = count_offscreen(cam_reader, last_locked_time, 3)
+            time.sleep(2)
+        print('enough off screen time')
+        print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
 
-        # last_locked_time = str(datetime.now().time())
-        # # off screen count for 5 min
-        # offscreen_enough = False
-        # while not offscreen_enough:
-        #     offscreen_enough = count_offscreen(cam_reader, last_locked_time, 3)
-        #     time.sleep(2)
-        # print('enough off screen time')
-        # print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-
-        # unlocked = False
-        # while not unlocked:
-        #     unlocked = unlock(unlock_reader)
-        # last_unlocked_time = str(datetime.now().time())
+        unlocked = False
+        while not unlocked:
+            unlocked = unlock(unlock_reader)
+        last_unlocked_time = str(datetime.now().time())
   
     
             
 
 
-
-
-
-
-    # while True:
-        
-
-    #     locked = capture_and_openpose(cam_reader, last_unlocked_time)
-
-    #     if locked:
-    #         logger.info('Locked.')
-    #         while True:
-    #             unlocked = unlock(unlock_reader)
-    #             if unlocked:
-    #                 break
-    #             time.sleep(1)
-    #         logger.info('Unlocked.')
-    #         last_unlocked_time = str(datetime.now().time())
-
-    #         time.sleep(1)
-
-    #     time.sleep(1)
