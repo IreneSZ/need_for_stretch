@@ -3,6 +3,7 @@ from collections import defaultdict
 import numpy as np
 
 import math
+import cv2 
 
 
 # determine whether the person is in sitting position: if any of the following conditions is met

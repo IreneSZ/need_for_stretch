@@ -15,23 +15,20 @@ import schedule
 import torch
 from loguru import logger
 from op import model, util
-from op.body import Body
+from op.body_2 import Body
+
+#from op.body import Body
 from op.hand import Hand
 from playsound import playsound
 
 from detect_position.position_detection import baseline
-from lock_unlock import (continuous_stretch, get_last_n_positions,
+from lock_unlock import (continuous_stretch, get_position_records,
                          get_strech_metrics, lock_pc, unlock_pc)
 from posture_correction import hand_on_face, head_shoulder
 from record_key_points import (get_points_webcam, process_candidate,
                                record_points)
 from reader import DebugReader, VideoReader, Reader
 from argparse import ArgumentParser
-
-# every 30 seconds, run this script to 
-# (1) run openpose, get key points coordinates
-# (2) run the model to detect sitting/standing position
-# (3) store the timestamp, key points coordinates, position indicators into a csv (one csv for each day)
 
 
 
@@ -43,38 +40,51 @@ from argparse import ArgumentParser
 # 4. if PC locked, count off-screen time
 # 5. if PC locked and off-screen time >= 5 min, set status to "unlockable", check for stretch 
 
-# def capture_and_openpose():
-#     lst_points, data = get_points_webcam(capture)
-#     record_points(db_path, lst_points)
 
-def capture_and_openpose(reader: Reader) -> bool:
+def capture_and_openpose(reader: Reader, last_unlocked_time) -> bool:
     #print('start capturing')
     # capture = cv2.VideoCapture(0)
     # capture.set(3, 320)
     # capture.set(4, 240)
     lst_points, data = get_points_webcam(reader)
 
-    # only record points and do posture correction when enough key points are detected
-    locked = False
-    if (data[0] == -1).sum() <= 5: 
-        record_points(db_path, lst_points)
+    record_points(db_path, lst_points)
 
-        # posture correction
-        
+    # posture correction, only execute when person is detected
+    if lst_points[-1] != -1:
         wrong_position = head_shoulder(data)
         wrong_hand = hand_on_face(data, 30)
         if wrong_position or wrong_hand:
             playsound('./sound_effects/alarm.m4a')
 
-        # lock
-        last_n_records = get_last_n_positions(db_path, num_records=3)
-        if last_n_records.count(1) > 3 * 0.5:
-            locked = True
-            logger.info('Sitting for too long.')
-            pyautogui.hotkey('winleft', 'l')
-            time.sleep(5)
+    # lock
+    last_position_records = get_position_records(db_path, last_unlocked_time)
+
+
+    locked = False
+    if last_position_records.count(1) > 10 * 0.5:
+        locked = True
+        logger.info('Sitting for too long, will lock PC.')
+        pyautogui.hotkey('winleft', 'l')
+        time.sleep(5)
     
     return locked
+
+def count_offscreen(reader: Reader, last_locked_time, num_offscreen_records) -> bool:
+    offscreen_enough = False
+    lst_points, data = get_points_webcam(reader)
+    record_points(db_path, lst_points)
+    last_position_records = get_position_records(db_path, last_locked_time)
+    if last_position_records.count(-1) >= num_offscreen_records:
+        offscreen_enough = True
+    return offscreen_enough
+    
+
+
+
+
+
+
 
 def unlock(reader: Reader) -> bool:
     # capture = cv2.VideoCapture(0)
@@ -83,7 +93,7 @@ def unlock(reader: Reader) -> bool:
     # lst_points, data = get_points_webcam(reader)
     # decide whether to lock pc
     # when PC is locked, recording is paused
-    if continuous_stretch(2, reader, min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee):
+    if continuous_stretch(2, reader, min_elbow, max_elbow, min_shoulder, max_shoulder, min_hip, max_hip, min_knee, max_knee):
         unlock_pc()
         return True
     return False
@@ -124,7 +134,6 @@ if __name__ == '__main__':
 
 
     db_path = Path('daily_log.db')
-
     try:
         conn = sqlite3.connect(f'file:{db_path}?mode=rw', uri=True)
     except sqlite3.OperationalError:
@@ -145,10 +154,9 @@ if __name__ == '__main__':
         conn.close()
         logger.info(f'Database created at {db_path}.')
 
-
-    # lst_points, data = get_points_webcam(capture)
-
-    min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee = get_strech_metrics('./squat_img/')
+    # get the data for stretch positions
+    min_elbow, max_elbow, min_shoulder, max_shoulder, min_hip, max_hip, min_knee, max_knee = get_strech_metrics('./squat_img/')
+    print(min_elbow, max_elbow, min_shoulder, max_shoulder, min_hip, max_hip, min_knee, max_knee)
     # print(continuous_stretch(2, data, min_elbow, max_elbow, min_hip, max_hip, min_knee, max_knee))
 
     cam_reader = VideoReader(debug=args.debug)
@@ -156,25 +164,56 @@ if __name__ == '__main__':
     #     unlock_reader = DebugReader('./squat_test')
     # else:
     unlock_reader = cam_reader
-# 
-    # schedule.every(0.1).minutes.do(capture_and_openpose, reader=cam_reader)
-    # schedule.every(0.1).minutes.do(lock_and_unlock, reader=unlock_reader)
 
-    # while True:
 
-        # schedule.run_pending()
-        # time.sleep(1)
+    last_unlocked_time = str(datetime.now().time())
 
     while True:
-        locked = capture_and_openpose(cam_reader)
+        lst_points, data = get_points_webcam(cam_reader)
 
-        if locked:
-            logger.info('Locked.')
-            while True:
-                unlocked = unlock(unlock_reader)
-                if unlocked:
-                    break
-                time.sleep(1)
-            logger.info('Unlocked.')
+        record_points(db_path, lst_points)
+        # locked = False
+        # while not locked:
+        #     time.sleep(2)
+        #     locked = capture_and_openpose(cam_reader, last_unlocked_time)
 
-        time.sleep(1)
+        # last_locked_time = str(datetime.now().time())
+        # # off screen count for 5 min
+        # offscreen_enough = False
+        # while not offscreen_enough:
+        #     offscreen_enough = count_offscreen(cam_reader, last_locked_time, 3)
+        #     time.sleep(2)
+        # print('enough off screen time')
+        # print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
+
+        # unlocked = False
+        # while not unlocked:
+        #     unlocked = unlock(unlock_reader)
+        # last_unlocked_time = str(datetime.now().time())
+  
+    
+            
+
+
+
+
+
+
+    # while True:
+        
+
+    #     locked = capture_and_openpose(cam_reader, last_unlocked_time)
+
+    #     if locked:
+    #         logger.info('Locked.')
+    #         while True:
+    #             unlocked = unlock(unlock_reader)
+    #             if unlocked:
+    #                 break
+    #             time.sleep(1)
+    #         logger.info('Unlocked.')
+    #         last_unlocked_time = str(datetime.now().time())
+
+    #         time.sleep(1)
+
+    #     time.sleep(1)

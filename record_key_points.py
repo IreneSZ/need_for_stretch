@@ -14,7 +14,8 @@ import numpy as np
 import torch
 from loguru import logger
 from op import model, util
-from op.body import Body
+#from op.body import Body
+from op.body_2 import Body
 from op.hand import Hand
 
 from detect_position.position_detection import baseline
@@ -31,7 +32,7 @@ if not os.path.isdir('./db'):
     os.mkdir('./db')
 
 
-#@profile
+# @profile
 def get_points_webcam(reader: Reader):
     """
     camera takes a pic
@@ -43,17 +44,30 @@ def get_points_webcam(reader: Reader):
     end = time.time()
 
     start = time.time()
-    #print(img.shape)
+    # print(img.shape)
     candidate, subset = body_estimation(img)
     end = time.time()
-    print('openpose time is', end-start)
+    #logger.info(f'openpose time is {end-start}.')
 
     lst_points, data = process_candidate(candidate)
     lst_points = sit_or_stand(lst_points, data)
+
+    y_pred = lst_points[-1]
+
+    if y_pred == 0:
+        status = 'stand'
+    if y_pred == 1:
+        status = 'sit'
+    if y_pred == -1:
+        status = 'off screen'
+    end = time.time()
+    logger.info(f'position classified as: {status}.')
+
     return lst_points, data
 
+
 def process_candidate(candidate):
-    candidate = dict_index(candidate) 
+    candidate = dict_index(candidate)
     # prepare the data to be used for the position detection model
     data = np.zeros((2, 18))
     for col in range(18):
@@ -65,7 +79,7 @@ def process_candidate(candidate):
         else:
             data[0, col] = -1
             data[1, col] = -1
-    
+
     # create a list of timestamp and 18 coordinates
     lst_points = [datetime.now()]
     for i in range(18):
@@ -77,6 +91,7 @@ def process_candidate(candidate):
 
     return lst_points, data
 
+
 def sit_or_stand(lst_points, data):
     # if no points detected, y_pred = -1, meaning no person in view
     if all(p == -1 for p in lst_points[1:]):
@@ -86,24 +101,24 @@ def sit_or_stand(lst_points, data):
         start = time.time()
 
         data = torch.Tensor(data)
-        y_score = model(data.view(-1, 36)).detach().softmax(dim=1).numpy()   
+        y_score = model(data.view(-1, 36)).detach().softmax(dim=1).numpy()
         y_pred = np.argmax(y_score, axis=1).item()
-
-        if y_pred == 0:
-            print('stand')
-        if y_pred == 1:
-            print('sit')
         end = time.time()
-        print('position classification time:', end - start)
+
+        logger.info(f'position classification time is {end-start}.')
+
+        # if y_pred == 0:
+        #     status = 'stand'
+        # if y_pred == 1:
+        #     status = 'sit'
+        # if y_pred == -1:
+        #     status = 'off screen'
+        # end = time.time()
+        # logger.info(f'position classified as: {status}.')
 
     lst_points.append(y_pred)
 
     return lst_points
-
-
-
-
-
 
 
 def record_points(db_path, lst_points):
@@ -116,7 +131,9 @@ def record_points(db_path, lst_points):
     cols += '?)'
 
     sql_statement = "INSERT INTO records VALUES " + cols
-    cur.executemany(sql_statement, [tuple(lst_points)])
+    #cur.executemany(sql_statement, [tuple(lst_points)])
+    cur.executemany(sql_statement, [lst_points])
+
     conn.commit()
     conn.close()
-    logger.info(f'Database created at {db_path}.')
+    #logger.info(f'Database updated at {db_path}.')
