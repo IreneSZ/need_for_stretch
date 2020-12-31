@@ -27,9 +27,6 @@ model = baseline(36, 20, 10, 8, 5, 2)
 model.load_state_dict(torch.load('detect_position/baseline.pt'))
 model.eval()
 
-if not os.path.isdir('./db'):
-    os.mkdir('./db')
-
 
 # @profile
 def get_points_webcam(reader: Reader):
@@ -47,20 +44,21 @@ def get_points_webcam(reader: Reader):
     logger.info(f'openpose time is {end-start}.')
 
     lst_points, data = process_candidate(candidate)
-    lst_points = sit_or_stand(lst_points, data)
+    # lst_points = sit_or_stand(lst_points, data)
 
-    y_pred = lst_points[-1]
+    # y_pred = lst_points[-1]
 
-    if y_pred == 0:
-        status = 'stand'
-    if y_pred == 1:
-        status = 'sit'
-    if y_pred == -1:
-        status = 'off screen'
-    end = time.time()
-    logger.info(f'position classified as: {status}.')
+    # if y_pred == 0:
+    #     status = 'stand'
+    # if y_pred == 1:
+    #     status = 'sit'
+    # if y_pred == -1:
+    #     status = 'off screen'
+    # end = time.time()
+    # logger.info(f'position classified as: {status}.')
 
     return lst_points, data
+
 
 
 def process_candidate(candidate):
@@ -100,6 +98,17 @@ def sit_or_stand(lst_points, data):
         y_pred = np.argmax(y_score, axis=1).item()
         end = time.time()
         logger.info(f'position classification time is {end-start}.')
+
+
+    if y_pred == 0:
+        status = 'stand'
+    if y_pred == 1:
+        status = 'sit'
+    if y_pred == -1:
+        status = 'off screen'
+    end = time.time()
+    logger.info(f'position classified as: {status}.')
+
     lst_points.append(y_pred)
 
     return lst_points

@@ -55,7 +55,7 @@ def lock_pc(last_n_records, num_records, pct_sitting):
     return True
 
 
-def unlock_pc():
+def type_password():
     """
     type in the password to unlock pc
     """
@@ -63,11 +63,11 @@ def unlock_pc():
     pyautogui.typewrite(['enter'])
 
 
-def get_points_oneshot(img_path):
+def get_points_img(img_path):
     img = cv2.imread(img_path)
     img = cv2.resize(img, (320, 240))
     candidate, subset = body_estimation(img)
-    lst_points, data = process_candidate(candidate)
+    _, data = process_candidate(candidate)
 
     return data
 
@@ -101,7 +101,7 @@ def get_strech_metrics(img_folder):
 
     for img in lst_stretch_img:
         img_path = img_folder + img
-        data = get_points_oneshot(img_path)
+        data = get_points_img(img_path)
 
         elbow_angle = three_point_angle(data, 4, 3, 2)
         lst_elbow_angle.append(elbow_angle)
@@ -150,13 +150,13 @@ def is_squat(data, min_elbow, max_elbow, min_shoulder, max_shoulder, min_hip, ma
         return False
 
 
-def continuous_stretch(num_seconds, reader, min_elbow, max_elbow, min_shoulder, max_shoulder, min_hip, max_hip, min_knee, max_knee):
+def continuous_stretch(stretch_time, reader, min_elbow, max_elbow, min_shoulder, max_shoulder, min_hip, max_hip, min_knee, max_knee):
     """
-    need to hold the position for num_seconds seconds, continuously
+    need to hold the position for stretch_time seconds, continuously
     """
     num_stretch = 0
     start_time = time.time()
-    while num_stretch < num_seconds:
+    while num_stretch < stretch_time:
         if time.time() - start_time >= 1:
             _, data = get_points_webcam(reader)
             if is_squat(data, min_elbow, max_elbow, min_shoulder, max_shoulder, min_hip, max_hip, min_knee, max_knee):
