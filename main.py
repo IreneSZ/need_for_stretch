@@ -1,8 +1,10 @@
 import copy
+import math
 import os
 import sqlite3
 import threading
 import time
+from argparse import ArgumentParser
 from collections import deque
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -10,24 +12,21 @@ from pathlib import Path
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
-import math
 import pyautogui
 import torch
 from loguru import logger
 from op import model, util
-from op.body import Body
 from op.hand import Hand
 from playsound import playsound
 
-from detect_position.position_detection import baseline
+from detect_position.position_detection import Dnn
 from lock_unlock import (continuous_stretch, get_position_records,
-                         get_strech_metrics, lock_pc, type_password)
+                         get_strech_metrics, lock_pc, type_password, StretchMetrics)
+from model import Model
 from posture_correction import hand_on_face, head_shoulder
+from reader import DebugReader, Reader, VideoReader
 from record_key_points import (get_points_webcam, process_candidate,
                                record_points, sit_or_stand)
-from reader import DebugReader, VideoReader, Reader
-from argparse import ArgumentParser
-
 
 #########################################
 # every 30 seconds:
@@ -38,9 +37,9 @@ from argparse import ArgumentParser
 # 5. if PC locked and off-screen time >= 5 min, set status to "unlockable", check for stretch
 
 
-def capture_and_openpose(reader: Reader, last_unlocked_time, screen_time, openpose_interval, pct_sitting) -> bool:
-    lst_points, data = get_points_webcam(reader)
-    lst_points = sit_or_stand(lst_points, data)
+def capture_and_openpose(db_path: Path, reader: Reader, last_unlocked_time, screen_time, openpose_interval, pct_sitting, model: Model) -> bool:
+    lst_points, data = get_points_webcam(reader, model)
+    lst_points = sit_or_stand(lst_points, data, model)
     record_points(db_path, lst_points)
 
     # posture correction, only execute when person is detected
@@ -63,11 +62,11 @@ def capture_and_openpose(reader: Reader, last_unlocked_time, screen_time, openpo
     return locked
 
 
-def count_offscreen(reader: Reader, last_locked_time, offscreen_time, openpose_interval) -> bool:
+def count_offscreen(db_path: Path, reader: Reader, last_locked_time, offscreen_time, openpose_interval, model: Model) -> bool:
     offscreen_enough = False
     num_offscreen_records = math.floor(offscreen_time / openpose_interval)
-    lst_points, data = get_points_webcam(reader)
-    lst_points = sit_or_stand(lst_points, data)
+    lst_points, data = get_points_webcam(reader, model)
+    lst_points = sit_or_stand(lst_points, data, model)
     record_points(db_path, lst_points)
     last_position_records = get_position_records(db_path, last_locked_time)
     if last_position_records.count(-1) >= num_offscreen_records:
@@ -75,32 +74,14 @@ def count_offscreen(reader: Reader, last_locked_time, offscreen_time, openpose_i
     return offscreen_enough
 
 
-def unlock(reader: Reader, stretch_time) -> bool:
-    if continuous_stretch(stretch_time, reader, min_elbow, max_elbow, min_shoulder, max_shoulder, min_hip, max_hip, min_knee, max_knee):
-        type_password()
+def unlock(reader: Reader, stretch_time: float, stretch_metrics: StretchMetrics, password: str, model: Model)  -> bool:
+    if continuous_stretch(stretch_time, reader, stretch_metrics, model):
+        type_password(password)
         return True
     return False
 
 
-if __name__ == '__main__':
-    parser = ArgumentParser()
-    parser.add_argument('--debug', action='store_true', help='Toggle debug mode.')
-    parser.add_argument('--screen_time', default=30, help='number of seconds in front of the screen')
-    parser.add_argument('--pct_sitting', default=0.9, help='max percent of sitting time in front of the screen')
-    parser.add_argument('--openpose_interval', default=3, help='num of seconds between each pose estimation run')
-    parser.add_argument('--dir_stretch', default='./squat_img/', help='the dir to store self-defined stretch pose images')
-    parser.add_argument('--offscreen_time', default=5, help='number of seconds needed before unlock process can start')
-    parser.add_argument('--stretch_time', default=3, help='number of seconds needed for the stretch poses')
-
-    args = parser.parse_args()
-
-    # openpose model and position classification model
-    body_estimation = Body('body_pose_model.pth')
-    model = baseline(36, 20, 10, 8, 5, 2)
-    model.load_state_dict(torch.load('detect_position/baseline.pt'))
-    model.eval()
-
-    # create database to store the timestamp, key points coordinates and position status 
+def connect_to_db(path: str) -> Path:
     db_path = Path('daily_log.db')
     try:
         conn = sqlite3.connect(f'file:{db_path}?mode=rw', uri=True)
@@ -111,8 +92,8 @@ if __name__ == '__main__':
                 f'{db_path} exists, but it is not not a valid database.')
 
         # Create a database here.
-        col_names = ['timestamp', 'nose', 'neck', 'l_shoulder', 'l_elbow', 'l_hand', 'r_shoulder', 'r_elbow', 'r_hand', 'l_hip', 'l_knee', 'l_foot', 
-                    'r_hip', 'r_knee', 'r_foot', 'l_eye', 'r_eye', 'l_ear', 'r_ear', 'position']
+        col_names = ['timestamp', 'nose', 'neck', 'l_shoulder', 'l_elbow', 'l_hand', 'r_shoulder', 'r_elbow', 'r_hand', 'l_hip', 'l_knee', 'l_foot',
+                     'r_hip', 'r_knee', 'r_foot', 'l_eye', 'r_eye', 'l_ear', 'r_ear', 'position']
 
         col_types = ['datetime']
         col_types += ['float NOT NULL'] * 18
@@ -142,34 +123,61 @@ if __name__ == '__main__':
         conn.commit()
         conn.close()
         logger.info(f'Database created at {db_path}.')
+    return db_path
+
+
+if __name__ == '__main__':
+    parser = ArgumentParser()
+    parser.add_argument('password', help='Password for your machine')
+    parser.add_argument('--debug', action='store_true',
+                        help='Toggle debug mode.')
+    parser.add_argument('--screen_time', default=10,
+                        help='number of seconds in front of the screen')
+    parser.add_argument('--pct_sitting', default=0.9,
+                        help='max percent of sitting time in front of the screen')
+    parser.add_argument('--openpose_interval', default=2,
+                        help='num of seconds between each pose estimation run')
+    parser.add_argument('--dir_stretch', default='./squat_img/',
+                        help='the dir to store self-defined stretch pose images')
+    parser.add_argument('--offscreen_time', default=5,
+                        help='number of seconds needed before unlock process can start')
+    parser.add_argument('--stretch_time', default=3,
+                        help='number of seconds needed for the stretch poses')
+
+    args = parser.parse_args()
+
+    # openpose model and position classification model
+    model = Model('body_pose_model.pth', 'detect_position/baseline.pt')
+
+    # create database to store the timestamp, key points coordinates and position status
+    db_path = connect_to_db('daily_log.db')
 
     # get the data for stretch positions
-    min_elbow, max_elbow, min_shoulder, max_shoulder, min_hip, max_hip, min_knee, max_knee = get_strech_metrics(img_folder=args.dir_stretch)
+    stretch_metrics = get_strech_metrics(args.dir_stretch, model)
 
+    # Get the video feed.
     cam_reader = VideoReader(debug=args.debug)
-    # if args.debug:
-    #     unlock_reader = DebugReader('./squat_test')
-    # else:
     unlock_reader = cam_reader
-
 
     last_unlocked_time = str(datetime.now().time())
     while True:
         locked = False
         while not locked:
             time.sleep(args.openpose_interval)
-            locked = capture_and_openpose(cam_reader, last_unlocked_time, args.screen_time, args.openpose_interval, args.pct_sitting)
+            locked = capture_and_openpose(
+                db_path, cam_reader, last_unlocked_time, args.screen_time, args.openpose_interval, args.pct_sitting, model)
 
         last_locked_time = str(datetime.now().time())
         # off screen count for 5 min
         offscreen_enough = False
         while not offscreen_enough:
-            offscreen_enough = count_offscreen(cam_reader, last_locked_time, args.offscreen_time, args.openpose_interval)
+            offscreen_enough = count_offscreen(
+                db_path, cam_reader, last_locked_time, args.offscreen_time, args.openpose_interval, model)
             time.sleep(args.openpose_interval)
         logger.info('Enough off screen time, will start detecting stretch')
 
         unlocked = False
         while not unlocked:
-            unlocked = unlock(unlock_reader, args.stretch_time)
+            unlocked = unlock(unlock_reader, args.stretch_time, stretch_metrics, args.password, model)
         last_unlocked_time = str(datetime.now().time())
         logger.info('Stretch detected, will unlock screen')

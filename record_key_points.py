@@ -17,19 +17,13 @@ from op import model, util
 from op.body import Body
 from op.hand import Hand
 
-from detect_position.position_detection import baseline
 from reader import Reader
 from utils import dict_index
-
-body_estimation = Body('body_pose_model.pth')
-
-model = baseline(36, 20, 10, 8, 5, 2)
-model.load_state_dict(torch.load('detect_position/baseline.pt'))
-model.eval()
+from model import Model
 
 
 # @profile
-def get_points_webcam(reader: Reader):
+def get_points_webcam(reader: Reader, model: Model):
     """
     camera takes a pic
     calls openpose + position detection
@@ -39,26 +33,11 @@ def get_points_webcam(reader: Reader):
     ret, img = reader.read()
     end = time.time()
     start = time.time()
-    candidate, subset = body_estimation(img)
+    candidate, subset = model.estimate_body(img)
     end = time.time()
     logger.info(f'openpose time is {end-start}.')
 
-    lst_points, data = process_candidate(candidate)
-    # lst_points = sit_or_stand(lst_points, data)
-
-    # y_pred = lst_points[-1]
-
-    # if y_pred == 0:
-    #     status = 'stand'
-    # if y_pred == 1:
-    #     status = 'sit'
-    # if y_pred == -1:
-    #     status = 'off screen'
-    # end = time.time()
-    # logger.info(f'position classified as: {status}.')
-
-    return lst_points, data
-
+    return process_candidate(candidate)
 
 
 def process_candidate(candidate):
@@ -86,7 +65,7 @@ def process_candidate(candidate):
     return lst_points, data
 
 
-def sit_or_stand(lst_points, data):
+def sit_or_stand(lst_points, data, model: Model):
     # if no points detected, y_pred = -1, meaning no person in view
     if all(p == -1 for p in lst_points[1:]):
         y_pred = -1
@@ -94,20 +73,19 @@ def sit_or_stand(lst_points, data):
         # only run the position detection model when person is detected
         start = time.time()
         data = torch.Tensor(data)
-        y_score = model(data.view(-1, 36)).detach().softmax(dim=1).numpy()
+        y_score = model.classify_sit_or_stand(
+            data.view(-1, 36)).detach().softmax(dim=1).numpy()
         y_pred = np.argmax(y_score, axis=1).item()
         end = time.time()
         logger.info(f'position classification time is {end-start}.')
 
-
-    if y_pred == 0:
-        status = 'stand'
-    if y_pred == 1:
-        status = 'sit'
-    if y_pred == -1:
-        status = 'off screen'
+    pred2status = {
+        0: 'stand',
+        1: 'sit',
+        -1: 'off screen'
+    }
     end = time.time()
-    logger.info(f'position classified as: {status}.')
+    logger.info(f'position classified as: {pred2status[y_pred]}.')
 
     lst_points.append(y_pred)
 

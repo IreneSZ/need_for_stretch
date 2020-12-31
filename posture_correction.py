@@ -1,7 +1,7 @@
-import math 
+import math
+
 import numpy as np
 from loguru import logger
-
 
 
 def calculate_angle(coor1, coor2):
@@ -13,7 +13,7 @@ def calculate_angle(coor1, coor2):
     x1, y1 = coor1
     x2, y2 = coor2
     cos = (x2 - x1) / math.sqrt((x2 - x1) ** 2 + (y1 - y2) ** 2)
-    
+
     return cos
 
 
@@ -26,7 +26,6 @@ def dist(coor1, coor2):
     distance = math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
     return distance
-
 
 
 def head_shoulder(data):
@@ -57,7 +56,7 @@ def head_shoulder(data):
     if l_ear != (-1, -1):
         cos_ear = calculate_angle(l_shoulder, l_ear)
         ind_ear = cos_ear < -0.8
-        
+
     if l_eye != (-1, -1):
         cos_eye = calculate_angle(l_shoulder, l_eye)
         ind_eye = cos_eye < -0.6
@@ -65,14 +64,14 @@ def head_shoulder(data):
     if nose != (-1, -1):
         cos_nose = calculate_angle(l_shoulder, nose)
         ind_nose = cos_nose < -0.73
-        
+
     if any([ind_ear, ind_eye, ind_nose]):
         logger.info(f'WARNING: wrong head shoulder posture')
         return True
     else:
         return False
 
-    
+
 def get_coords(idx, data):
     x = data[0, :]
     y = data[1, :]
@@ -101,13 +100,9 @@ def hand_on_face(data, threshold):
     for hand in [l_hand, r_hand]:
         for point2 in [l_eye, r_eye, l_ear, r_ear, nose]:
             safe_append(hand, point2, lst_dist)
-    #print(lst_dist)
+    # print(lst_dist)
     if min(lst_dist) <= threshold:
         logger.info(f'WARNING: hand on face')
         return True
     else:
         return False
-
-
-
-

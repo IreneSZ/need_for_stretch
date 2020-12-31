@@ -3,8 +3,10 @@ import math
 import os
 import sqlite3
 import time
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from sqlite3 import Error
+from typing import Dict, Tuple
 
 import cv2
 import numpy as np
@@ -16,22 +18,12 @@ from op.hand import Hand
 from scipy import spatial
 from scipy.spatial import distance
 
+from model import Model
 from record_key_points import (get_points_webcam, process_candidate,
                                record_points)
 
-body_estimation = Body('body_pose_model.pth')
 
-
-if not os.path.isdir('./squat_img'):
-    os.mkdir('./squat_img')
-
-
-# the function to retrieve the last N records of the database
 def get_position_records(db_path, records_start_time):
-    """
-    num_records: number of records to get
-    """
-
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     #lst_positions = cur.execute(f'SELECT position FROM records ORDER BY timestamp DESC LIMIT {earliest_timestamp}').fetchall()
@@ -55,20 +47,19 @@ def lock_pc(last_n_records, num_records, pct_sitting):
     return True
 
 
-def type_password():
+def type_password(password: str):
     """
     type in the password to unlock pc
     """
-    pyautogui.write('justtrAIit', interval=0.2)
+    pyautogui.write(password, interval=0.2)
     pyautogui.typewrite(['enter'])
 
 
-def get_points_img(img_path):
+def get_points_img(img_path, model: Model):
     img = cv2.imread(img_path)
     img = cv2.resize(img, (320, 240))
-    candidate, subset = body_estimation(img)
+    candidate, subset = model.estimate_body(img)
     _, data = process_candidate(candidate)
-
     return data
 
 
@@ -91,7 +82,23 @@ def three_point_angle(data, idx_start, idx_mid, idx_end):
     return angle
 
 
-def get_strech_metrics(img_folder):
+@dataclass
+class StretchMetrics:
+    elbow: Tuple[float, float]
+    shoulder: Tuple[float, float]
+    hip: Tuple[float, float]
+    knee: Tuple[float, float]
+
+    def in_range(self, values: Dict[str, float]) -> bool:
+        attr_dict = asdict(self)
+        for part, v in values.items():
+            min_v, max_v = attr_dict[part]
+            if v > max_v or v < min_v:
+                return False
+        return True
+
+
+def get_strech_metrics(img_folder, model: Model) -> StretchMetrics:
     lst_elbow_angle = []
     lst_shoulder_angle = []
     lst_hip_angle = []
@@ -101,7 +108,7 @@ def get_strech_metrics(img_folder):
 
     for img in lst_stretch_img:
         img_path = img_folder + img
-        data = get_points_img(img_path)
+        data = get_points_img(img_path, model)
 
         elbow_angle = three_point_angle(data, 4, 3, 2)
         lst_elbow_angle.append(elbow_angle)
@@ -124,7 +131,11 @@ def get_strech_metrics(img_folder):
     min_knee = min(lst_knee_angle)
     max_knee = max(lst_knee_angle)
 
-    return min_elbow, max_elbow, min_shoulder, max_shoulder, min_hip, max_hip, min_knee, max_knee
+    return StretchMetrics(
+        (min_elbow, max_elbow),
+        (min_shoulder, max_shoulder),
+        (min_hip, max_hip),
+        (min_knee, max_knee))
 
 
 def show_readable_angle(part: str, angle: float):
@@ -132,25 +143,27 @@ def show_readable_angle(part: str, angle: float):
     print(f'{part} angle {angle:.1f}.')
 
 
-def is_squat(data, min_elbow, max_elbow, min_shoulder, max_shoulder, min_hip, max_hip, min_knee, max_knee):
+def is_squat(data, stretch_metrics: StretchMetrics) -> bool:
     elbow = three_point_angle(data, 4, 3, 2)
     shoulder = three_point_angle(data, 3, 2, 8)
     hip = three_point_angle(data, 2, 8, 9)
     knee = three_point_angle(data, 8, 9, 10)
-    show_readable_angle('elbow', elbow)
-    show_readable_angle('shoulder', shoulder)
-    show_readable_angle('hip', hip)
-    show_readable_angle('knee', knee)
+    values = {
+        'elbow': elbow,
+        'shoulder': shoulder,
+        'hip': hip,
+        'knee': knee
+    }
+    for k, v in values.items():
+        show_readable_angle(k, v)
 
-    if min_elbow <= elbow <= max_elbow and min_shoulder <= shoulder <= max_shoulder and min_hip <= hip <= max_hip and min_knee <= knee <= max_knee:
-        logger.info(f'squat: {elbow}, {shoulder}, {hip}, {knee}')
-        return True
-    else:
-        logger.info(f'not squat: {elbow}, {shoulder}, {hip}, {knee}')
-        return False
+    is_in_range = stretch_metrics.in_range(values)
+    prefix = '' if is_in_range else 'not '
+    logger.info(prefix + f'squat: {elbow}, {shoulder}, {hip}, {knee}')
+    return is_in_range
 
 
-def continuous_stretch(stretch_time, reader, min_elbow, max_elbow, min_shoulder, max_shoulder, min_hip, max_hip, min_knee, max_knee):
+def continuous_stretch(stretch_time, reader, stretch_metrics: StretchMetrics, model: Model) -> bool:
     """
     need to hold the position for stretch_time seconds, continuously
     """
@@ -158,8 +171,8 @@ def continuous_stretch(stretch_time, reader, min_elbow, max_elbow, min_shoulder,
     start_time = time.time()
     while num_stretch < stretch_time:
         if time.time() - start_time >= 1:
-            _, data = get_points_webcam(reader)
-            if is_squat(data, min_elbow, max_elbow, min_shoulder, max_shoulder, min_hip, max_hip, min_knee, max_knee):
+            _, data = get_points_webcam(reader, model)
+            if is_squat(data, stretch_metrics):
                 num_stretch += 1
             else:
                 num_stretch = 0
@@ -167,5 +180,3 @@ def continuous_stretch(stretch_time, reader, min_elbow, max_elbow, min_shoulder,
             start_time = time.time()
 
     return True
-
-
